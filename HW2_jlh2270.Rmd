@@ -1,6 +1,203 @@
 ---
 title: "HW2"
 author: "Juyoung Hahm"
-date: "9/26/2020"
-output: html_document
+date: "10/1/2020"
+output: github_document
 ---
+
+```{r, include = F}
+library(tidyverse)
+library(dplyr)
+library(tidyr)
+library(readxl)
+```
+
+# Problem 1
+Read and clean the Mr. Trash Wheel sheet:
+```{r read and clean the Mr. Trash Wheel sheet, results='hide'}
+TrashWheel = 
+  read_excel("./Trash-Wheel-Collection-Totals-8-6-19.xlsx", 
+             sheet = "Mr. Trash Wheel", range = ("A2:N408")) %>%
+  janitor::clean_names() %>%
+  drop_na(dumpster) %>%
+  mutate(
+    sports_balls = round(sports_balls),
+    sports_balls = as.integer(sports_balls)
+  )
+```
+
+Read and clean precipitation data for 2017 and 2018. For each, omit rows without precipitation data and add a variable `year`. 
+```{r read and clean precipitation data for 2017 and 2018}
+precip2017 = 
+  read_excel("./Trash-Wheel-Collection-Totals-8-6-19.xlsx", 
+             sheet = "2017 Precipitation", range = ("A2:B14")) %>%
+  janitor::clean_names() %>%
+  mutate(year = 2017) %>%
+  relocate(year)
+
+precip2018 = 
+  read_excel("./Trash-Wheel-Collection-Totals-8-6-19.xlsx", 
+             sheet = "2018 Precipitation", range = ("A2:B14")) %>%
+  janitor::clean_names() %>%
+  mutate(year = 2018) %>%
+  relocate(year)
+```
+
+Next, combine precipitation data sets and convert month to a character variable.
+```{r combine}
+month_df = tibble(month = 1:12, month_name = month.name)
+precip_df = bind_rows(precip2017, precip2018)
+precip_df = left_join(precip_df, month_df, by = "month")
+```
+In the Mr. Trash Wheel data, `TrashWheel`, these data are recorded starting from 2014 to 2019. It shows the weight of the trash(tons), and kinds of  trash, such as:
+`plastic_bottles`, `polystyrene`, `cigarette_butts`, `glass_bottles`, `grocery_bags`, `chip_bags`, `sports_balls`, `homes_powered`.
+Looking at each year's data, we can see that every number of trash have been increasing.
+For instance, 
+
+* For the chip bags, on 2014, it was `r TrashWheel %>% filter(year == "2014") %>% pull(weight_tons) %>% sum()`, and in 2018, it was `r TrashWheel %>% filter(year == "2018") %>% pull(weight_tons) %>% sum()`. 
+
+* For the chip bags, on 2014, it was `r TrashWheel %>% filter(year == "2014") %>% pull(chip_bags) %>% sum() %>% as.integer()`, and in 2018, it was `r TrashWheel %>% filter(year == "2018") %>% pull(chip_bags) %>% sum() %>% as.integer()`. 
+
+* For the chip bags, on 2014, it was `r TrashWheel %>% filter(year == "2014") %>% pull(plastic_bottles) %>% sum() %>% as.integer()`, and in 2018, it was `r TrashWheel %>% filter(year == "2018") %>% pull(plastic_bottles) %>% sum() %>% as.integer()`. 
+
+* For the chip bags, on 2014, it was `r TrashWheel %>% filter(year == "2014") %>% pull(cigarette_butts) %>% sum() %>% as.integer()`, and in 2018, it was `r TrashWheel %>% filter(year == "2018") %>% pull(cigarette_butts) %>% sum() %>% as.integer()`. 
+
+According to the `precip_df`, the total precipitation in 2018 were `r precip_df %>% filter(year == "2018") %>% pull(total) %>% sum()`.
+The median number of sports balls in a dumpster in 2017 were `r TrashWheel %>% filter(year == "2017") %>% pull(sports_balls) %>% median()`.
+
+# Problem2
+
+Read and clean the data; retain line, station, name, station latitude / longitude, routes served, entry, vending, entrance type, and ADA compliance. 
+```{r clean the nyc_subway, message=FALSE}
+nyc_subway = 
+  read_csv("./NYC_Transit_Subway_Entrance_And_Exit_Data.csv") %>%
+  janitor::clean_names() %>%
+  select(line:route11, entry, vending, entrance_type, ada)
+```
+
+Next, we are going to convert `entry` into logical vector:
+```{r}
+nyc_subway$entry = ifelse(nyc_subway$entry == "YES", T,F)
+typeof(nyc_subway$entry)
+```
+In this data `nyc_subway`, I first organized the variable name by changing to lowercase, and '_' to the spaces between the names, and only removed variables except for these:
+`line`, `station_name`, `station_latitude`, `station_longitude`, `route1` to `route11`, `entry`, `vending`, `entrance_type`, `ada`.
+
+After cleaning these variables, there were `r nrow(nyc_subway) * ncol(nyc_subway)` data.
+These data are hard to read for the first-time seeing NYC subway because the station names and lines  are repeatedly shown. So, counting the distinct stations would be helpful to see. 
+According to `nyc_subway`:
+
+* There are `r nrow(distinct(nyc_subway, line, station_name))` distinct stations in NYC.
+* `r sum(nyc_subway$ada == TRUE)` stations are ADA compliant.
+* The proportion of station entrances / exits without vending allow entrance are `r nyc_subway %>%  filter(vending == "NO") %>% count()` to `r nyc_subway %>% filter(vending == "NO", entry == "TRUE") %>% count()`. 
+
+```{r, include = F}
+nyc_subway %>%
+  filter(vending == "NO") %>%
+  count() #number of stations entrances / exits that do not have vending
+nyc_subway %>%
+  filter(vending == "NO", entry == "TRUE") %>%
+  count()
+#number of stations entrances / exits that allow entrance but do not have vending
+```
+
+
+Below is the reformatted data, `nyc_subway_reformat` by creating new variables, `route_name` and `route_number`. 
+```{r reformat data}
+nyc_subway_reformat = nyc_subway %>%
+  mutate(
+    route8 = as.character(route8),
+    route9 = as.character(route9),
+    route10 = as.character(route10),
+    route11 = as.character(route11)
+  ) %>%
+  pivot_longer(
+    route1:route11,
+    names_to = "route_name",
+    values_to = "route_number"
+  )
+```
+* There are `r nyc_subway_reformat %>% filter(route_number == "A") %>% distinct(line,station_name) %>% nrow()` distinct stations that serve the A train. 
+* There are `r nyc_subway_reformat %>% filter(route_number == "A", ada == TRUE) %>% distinct(line,station_name) %>% nrow() ` stations that serve the A train and ADA compliant.
+
+
+
+# Problem 3
+First, clean the data in pols-month.csv. Use separate() to break up the variable mon into integer variables year, month, and day; replace month number with month name
+```{r pols-month replace a month number, message = F}
+pols_month = 
+  read_csv("./fivethirtyeight_datasets/pols-month.csv") %>%
+  janitor::clean_names() %>%
+  separate(mon, c("year", "month", "day"), sep = "-") %>%
+  mutate(month = as.numeric(month))
+
+month_df = tibble(month = 1:12, month_name = month.name) #used in Problem 1
+
+pols_month = left_join(pols_month, month_df, by = "month")
+pols_month =  pols_month %>%
+  select(year, month_name, day:rep_dem)
+```
+
+Then,create a president variable taking values gop and dem, and remove `prez_dem` and `prez_gop`; and remove the `day` variable.
+```{r pols_month create a president variable, results = 'hide'}
+pols_month = pols_month %>% 
+  mutate(president = case_when(prez_gop == "1" ~ "gop", prez_dem == "1" ~ "dem")) %>%
+  select(-prez_gop, -prez_dem, -day)
+```
+
+Then, clean the data in `snp` using a similar process to the above. For consistency across datasets, arrange according to year and month, and organize so that year and month are the leading columns.
+
+```{r snp clean and organize, message = F}
+snp = 
+  read_csv("./fivethirtyeight_datasets/snp.csv") %>%
+  janitor::clean_names() %>%
+  separate(date, c("month", "day", "year"), sep = "/") %>%
+  mutate(month = as.numeric(month))
+
+month_df = tibble(month = 1:12, month_name = month.name) #used in Problem 1
+
+snp = left_join(snp, month_df, by = "month")
+snp =  snp %>%
+  select(year, month_name, close)
+```
+
+Then, tidy the unemployment data so that it can be merged with the previous datasets. 
+```{r message = F}
+unemployment = 
+  read_csv("./fivethirtyeight_datasets/unemployment.csv", col_types = ) %>%
+  janitor::clean_names() 
+
+unemployment = unemployment %>%
+  pivot_longer(
+    jan:dec,
+    names_to = "month_name",
+    values_to = "percentage_unemployment")
+ 
+```
+
+```{r include = F}
+unemployment$month_name[which(unemployment$month_name == "jan")] <- "January"
+unemployment$month_name[which(unemployment$month_name == "feb")] <- "Feburary"
+unemployment$month_name[which(unemployment$month_name == "mar")] <- "March"
+unemployment$month_name[which(unemployment$month_name == "apr")] <- "April"
+unemployment$month_name[which(unemployment$month_name == "may")] <- "May"
+unemployment$month_name[which(unemployment$month_name == "jun")] <- "June"
+unemployment$month_name[which(unemployment$month_name == "jul")] <- "July"
+unemployment$month_name[which(unemployment$month_name == "aug")] <- "August"
+unemployment$month_name[which(unemployment$month_name == "sep")] <- "September"
+unemployment$month_name[which(unemployment$month_name == "oct")] <- "October"
+unemployment$month_name[which(unemployment$month_name == "nov")] <- "November"
+unemployment$month_name[which(unemployment$month_name == "dec")] <- "December"
+```
+
+Then, create a data, `pols_snp_unemployment` by joining the datasets by merging `snp` into `pols`, and merging `unemployment` into the result.
+```{r merge snp/pols/unemployment}
+pols_snp_unemployment = merge(unemployment, merge(snp, pols_month))
+```
+In the `pols_month`, it showed the number of national politicians who are democratic or republican at any given time. `snp`showes a representative measure of stock market as a whole. `unemployment` showed each month's unemployment percentages.
+In order to merge all three data, we separated a column `month_name` in order to merge the datasets easily. 
+
+After merging the data, there are `r nrow(pols_snp_unemployment) *  ncol(pols_snp_unemployment)` data. The range is `r range(pols_snp_unemployment$year)`.
+The main variables we need to look closely are: `year`, `percentage_unemployment` and `president`.
+
+We can know that the president from certain party had a lowest or highes unemployemnt rate. With this data, we can establish and predict which party had effected positively on our nation.
